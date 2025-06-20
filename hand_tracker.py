@@ -6,7 +6,7 @@ import mediapipe as mp
 
 class HandTracker:  # <-- make sure this is here exactly
     def __init__(
-        self, max_num_hands=1, detection_confidence=0.7, tracking_confidence=0.7
+        self, max_num_hands=2, detection_confidence=0.7, tracking_confidence=0.7
     ):
         self.max_num_hands = max_num_hands
 
@@ -30,11 +30,12 @@ class HandTracker:  # <-- make sure this is here exactly
 
         return frame
 
-    def get_landmark(self, frame, landmark_index=8):  # index finger tip
+    def get_landmarks(self, frame, landmark_index=8):
         h, w, c = frame.shape
+        positions = []
         if self.results.multi_hand_landmarks:
-            hand_landmarks = self.results.multi_hand_landmarks[0]
-            lm = hand_landmarks.landmark[landmark_index]
-            cx, cy = int(lm.x * w), int(lm.y * h)
-            return (cx, cy)
-        return None
+            for hand_landmarks in self.results.multi_hand_landmarks:
+                lm = hand_landmarks.landmark[landmark_index]
+                cx, cy = int(lm.x * w), int(lm.y * h)
+                positions.append((cx, cy))
+        return positions

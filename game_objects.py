@@ -6,8 +6,9 @@ class Fruit:
         self.screen_width = screen_width
         self.screen_height = screen_height
         self.radius = radius
-        self.speed = speed
+        self.speed = random.randint(5, 10)
         self.reset()
+        self.dx = random.randint(-2, 2)
 
     def reset(self):
         self.x = random.randint(100, self.screen_width - 100)
@@ -15,6 +16,9 @@ class Fruit:
 
     def move(self):
         self.y += self.speed
+        self.x += self.dx
+        if self.x < 50 or self.x > self.screen_width - 50:
+            self.dx *= -1
 
     def is_off_screen(self):
         return self.y > self.screen_height
@@ -29,8 +33,9 @@ class Bomb:
         self.screen_width = screen_width
         self.screen_height = screen_height
         self.radius = radius
-        self.speed = speed
+        self.speed = random.randint(5, 10)
         self.reset()
+        self.dx = random.randint(-2, 2)
 
     def reset(self):
         self.x = random.randint(100, self.screen_width - 100)
@@ -38,6 +43,10 @@ class Bomb:
 
     def move(self):
         self.y += self.speed
+        self.x += self.dx
+
+        if self.x < 50 or self.x > self.screen_width - 50:
+            self.dx *= -1
 
     def is_off_screen(self):
         return self.y > self.screen_height
