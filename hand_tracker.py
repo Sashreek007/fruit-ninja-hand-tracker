@@ -1,41 +1,49 @@
-# hand_tracker.py
-
 import cv2
 import mediapipe as mp
+from mediapipe.tasks.python.vision import GestureRecognizer, GestureRecognizerOptions
 
 
-class HandTracker:  # <-- make sure this is here exactly
-    def __init__(
-        self, max_num_hands=2, detection_confidence=0.7, tracking_confidence=0.7
-    ):
-        self.max_num_hands = max_num_hands
-
+class HandTracker:
+    def __init__(self, model_path="gesture_recognizer.task"):
+        # --- Setup classic Hands for stable multi-hand landmarks ---
         self.mp_hands = mp.solutions.hands
+        self.HandLandmark = self.mp_hands.HandLandmark  # ✅ proper enum!
         self.hands = self.mp_hands.Hands(
-            max_num_hands=self.max_num_hands,
-            min_detection_confidence=detection_confidence,
-            min_tracking_confidence=tracking_confidence,
+            max_num_hands=2, min_detection_confidence=0.7, min_tracking_confidence=0.7
         )
-        self.mp_draw = mp.solutions.drawing_utils
 
-    def find_hands(self, frame, draw=True):
+        # --- Setup GestureRecognizer for robust symbolic gestures ---
+        base_options = mp.tasks.BaseOptions(model_asset_path=model_path)
+        options = GestureRecognizerOptions(base_options=base_options)
+        self.recognizer = GestureRecognizer.create_from_options(options)
+
+        # --- Internal results ---
+        self.landmarks = None
+        self.gesture_result = None
+
+    def find_hands(self, frame):
+        """Use classic Hands API to detect multi-hand landmarks for slicing"""
         img_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-        self.results = self.hands.process(img_rgb)
-
-        if draw and self.results.multi_hand_landmarks:
-            for hand_landmarks in self.results.multi_hand_landmarks:
-                self.mp_draw.draw_landmarks(
-                    frame, hand_landmarks, self.mp_hands.HAND_CONNECTIONS
-                )
-
+        self.landmarks = self.hands.process(img_rgb)
         return frame
 
-    def get_landmarks(self, frame, landmark_index=8):
-        h, w, c = frame.shape
-        positions = []
-        if self.results.multi_hand_landmarks:
-            for hand_landmarks in self.results.multi_hand_landmarks:
-                lm = hand_landmarks.landmark[landmark_index]
-                cx, cy = int(lm.x * w), int(lm.y * h)
-                positions.append((cx, cy))
-        return positions
+    def find_gesture(self, frame):
+        """Use Tasks API to detect symbolic gestures"""
+        img_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=img_rgb)
+        self.gesture_result = self.recognizer.recognize(mp_image)
+
+    def get_fingertips(self):
+        """Return a list of all index finger tips"""
+        tips = []
+        if self.landmarks and self.landmarks.multi_hand_landmarks:
+            for hand in self.landmarks.multi_hand_landmarks:
+                lm = hand.landmark[self.HandLandmark.INDEX_FINGER_TIP]
+                tips.append((int(lm.x * 1280), int(lm.y * 720)))
+        return tips
+
+    def get_gesture(self):
+        """Return the top detected gesture name"""
+        if self.gesture_result and self.gesture_result.gestures:
+            return self.gesture_result.gestures[0][0].category_name
+        return None
