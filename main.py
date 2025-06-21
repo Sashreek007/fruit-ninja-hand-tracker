@@ -14,7 +14,7 @@ from game_objects import Balloon
 pygame.init()
 screen_width, screen_height = 1280, 720
 screen = pygame.display.set_mode((screen_width, screen_height))
-pygame.display.set_caption("Balloon Popper 🎈 - FINAL MAX_HANDS = 2")
+pygame.display.set_caption("Balloon Popper 🎈 - SAFE ELSE")
 clock = pygame.time.Clock()
 
 # --------------------------
@@ -26,7 +26,7 @@ cap.set(cv2.CAP_PROP_FRAME_WIDTH, screen_width)
 cap.set(cv2.CAP_PROP_FRAME_HEIGHT, screen_height)
 
 # --------------------------
-# High Score system (safe!)
+# High Score system
 # --------------------------
 if os.path.exists("highscore.txt"):
     with open("highscore.txt", "r") as f:
@@ -50,7 +50,7 @@ hit_times = []
 # Trails & Colors
 trails = []
 MAX_TRAIL_LENGTH = 5
-MAX_HANDS = 2
+MAX_HANDS = 2  # ✅ your real setting
 colors = [
     (255, 0, 0),  # red
     (0, 255, 255),  # cyan
@@ -67,7 +67,6 @@ RESTART_SECONDS = 3.0
 # Dead Eye
 dead_eye_active = False
 dead_eye_timer = 0.0
-DEAD_EYE_DURATION = 5.0
 
 # --------------------------
 # Main loop
@@ -243,8 +242,10 @@ while running:
             color = (0, 0, 0)
         elif balloon.type == "dead_eye":
             color = (255, 69, 0)
+        else:
+            color = (255, 255, 255)  # ✅ Fallback: white
         pygame.draw.circle(screen, color, balloon.position(), balloon.radius)
-    # fix later
+
     for i, trail in enumerate(trails):
         for j in range(1, len(trail)):
             pt1, pt2 = trail[j - 1], trail[j]
