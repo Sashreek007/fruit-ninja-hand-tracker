@@ -15,12 +15,14 @@ from game_objects import Balloon
 pygame.init()
 screen_width, screen_height = 1280, 720
 screen = pygame.display.set_mode((screen_width, screen_height))
-pygame.display.set_caption("Balloon Popper 🎈 - Balanced Version")
+pygame.display.set_caption("Balloon Popper 🎈 - Heart + Auto Life FIX")
 clock = pygame.time.Clock()
 
 # --------------------------
 # HandTracker & webcam
 # --------------------------
+model_path = os.path.join(os.getcwd(), "gesture_recognizer.task")
+
 if platform.system() == "Windows":
     cap = cv2.VideoCapture(0, cv2.CAP_DSHOW)
 else:
@@ -29,7 +31,7 @@ else:
 cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
 cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
 
-tracker = HandTracker("gesture_recognizer.task")
+tracker = HandTracker(model_path)
 
 # --------------------------
 # High Score system
@@ -50,6 +52,8 @@ lives = 3
 paused = False
 game_over = False
 
+bonus_life_threshold = 0  # ✅ NEW: track auto-life milestones
+
 hit_times = []
 trails = []
 MAX_TRAIL_LENGTH = 5
@@ -67,7 +71,7 @@ dead_eye_active = False
 dead_eye_timer = 0.0
 
 frame_count = 0
-MAX_BALLOONS = 8  # ✅ Limit total balloons for balance
+MAX_BALLOONS = 8
 
 running = True
 while running:
@@ -122,6 +126,7 @@ while running:
         balloons.clear()
         score = 0
         lives = 3
+        bonus_life_threshold = 0  # ✅ Reset tracker!
         hit_times.clear()
         trails = [[] for _ in trails]
         pause_counter = 0
@@ -142,16 +147,16 @@ while running:
         else:
             trails[i].clear()
 
-    # ✅ Slower growth, capped max balloons
     spawn_rate = 0.05 + min(score * 0.0005, 0.03)
     speed_multiplier = 1.0 + min(score * 0.0025, 0.5)
 
     weights = [
         56,  # normal
         10,  # golden
-        20 + min(score // 10, 10),
-        10 + min(score // 20, 10),
-        4,
+        20 + min(score // 10, 10),  # penalty
+        10 + min(score // 20, 10),  # bomb
+        4,  # dead_eye
+        1,  # heart
     ]
     total = sum(weights)
     r = random.uniform(0, total)
@@ -167,8 +172,10 @@ while running:
             bomb = Balloon(screen_width, screen_height, "bomb")
             bomb.speed *= 1.2
             balloons.append(bomb)
-        else:
+        elif r < weights[0] + weights[1] + weights[2] + weights[3] + weights[4]:
             balloons.append(Balloon(screen_width, screen_height, "dead_eye"))
+        else:
+            balloons.append(Balloon(screen_width, screen_height, "heart"))
 
     if not paused and not game_over:
         to_remove = []
@@ -177,7 +184,7 @@ while running:
                 balloon.move(speed_multiplier, score)
             if balloon.is_off_screen():
                 to_remove.append(balloon)
-                if balloon.type not in ["bomb", "dead_eye", "penalty"]:
+                if balloon.type not in ["bomb", "dead_eye", "penalty", "heart"]:
                     lives -= 1
                     if lives <= 0:
                         lives = 0
@@ -208,6 +215,8 @@ while running:
                             elif balloon.type == "dead_eye":
                                 dead_eye_active = True
                                 dead_eye_timer = 5.0
+                            elif balloon.type == "heart":
+                                lives += 1
                             hit_times.append(time.time())
                             break
                     else:
@@ -216,6 +225,11 @@ while running:
         for b in to_remove:
             if b in balloons:
                 balloons.remove(b)
+
+    # ✅ Auto +1 life every 75 score milestone
+    if score >= (bonus_life_threshold + 1) * 75:
+        lives += 1
+        bonus_life_threshold += 1
 
     hit_times = [t for t in hit_times if time.time() - t < 0.5]
     if len(hit_times) >= 3:
@@ -240,6 +254,8 @@ while running:
             color = (0, 0, 0)
         elif balloon.type == "dead_eye":
             color = (255, 69, 0)
+        elif balloon.type == "heart":
+            color = (255, 20, 147)
         else:
             color = (255, 255, 255)
         pygame.draw.circle(screen, color, balloon.position(), balloon.radius)
