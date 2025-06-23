@@ -5,6 +5,7 @@ import pygame
 import sys
 import time
 import os
+import platform
 from hand_tracker import HandTracker
 from game_objects import Balloon
 
@@ -14,16 +15,21 @@ from game_objects import Balloon
 pygame.init()
 screen_width, screen_height = 1280, 720
 screen = pygame.display.set_mode((screen_width, screen_height))
-pygame.display.set_caption("Balloon Popper 🎈 - SAFE ELSE")
+pygame.display.set_caption("Balloon Popper 🎈 - Balanced Version")
 clock = pygame.time.Clock()
 
 # --------------------------
 # HandTracker & webcam
 # --------------------------
+if platform.system() == "Windows":
+    cap = cv2.VideoCapture(0, cv2.CAP_DSHOW)
+else:
+    cap = cv2.VideoCapture(0)
+
+cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
+cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
+
 tracker = HandTracker("gesture_recognizer.task")
-cap = cv2.VideoCapture(0)
-cap.set(cv2.CAP_PROP_FRAME_WIDTH, screen_width)
-cap.set(cv2.CAP_PROP_FRAME_HEIGHT, screen_height)
 
 # --------------------------
 # High Score system
@@ -44,19 +50,12 @@ lives = 3
 paused = False
 game_over = False
 
-# Combo tracking
 hit_times = []
-
-# Trails & Colors
 trails = []
 MAX_TRAIL_LENGTH = 5
-MAX_HANDS = 2  # ✅ your real setting
-colors = [
-    (255, 0, 0),  # red
-    (0, 255, 255),  # cyan
-]
+MAX_HANDS = 2
+colors = [(255, 0, 0), (0, 255, 255)]
 
-# Pause/Restart
 pause_counter = 0
 resume_counter = 0
 restart_timer = 0.0
@@ -64,33 +63,34 @@ PAUSE_FRAMES = 1
 RESUME_FRAMES = 10
 RESTART_SECONDS = 3.0
 
-# Dead Eye
 dead_eye_active = False
 dead_eye_timer = 0.0
 
-# --------------------------
-# Main loop
-# --------------------------
+frame_count = 0
+MAX_BALLOONS = 8  # ✅ Limit total balloons for balance
+
 running = True
 while running:
     dt = clock.tick(30) / 1000
-
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
             running = False
 
     ret, frame = cap.read()
     frame = cv2.flip(frame, 1)
+    frame_count += 1
+
     tracker.find_hands(frame)
-    tracker.find_gesture(frame)
-    fingertips = tracker.get_fingertips()
+    if frame_count % 3 == 0:
+        tracker.find_gesture(frame)
+
+    fingertips = tracker.get_handed_fingertips()
     gesture = tracker.get_gesture()
 
     if gesture == "Victory":
         pause_counter += 1
         resume_counter = 0
-        if not (paused or game_over):
-            restart_timer = 0
+        restart_timer = 0
     elif gesture == "Thumb_Up":
         resume_counter += 1
         pause_counter = 0
@@ -131,30 +131,32 @@ while running:
         dead_eye_timer = 0.0
         print("✅ Game restarted!")
 
-    while len(trails) < len(fingertips):
+    while len(trails) < MAX_HANDS:
         trails.append([])
-    for i in range(len(fingertips), len(trails)):
-        trails[i].clear()
-    for i, fingertip in enumerate(fingertips):
-        trails[i].append(fingertip)
-        if len(trails[i]) > MAX_TRAIL_LENGTH:
-            trails[i].pop(0)
 
-    spawn_rate = 0.05 + min(score * 0.0005, 0.05)
-    speed_multiplier = 1.0 + min(score * 0.005, 1.0)
+    for i in range(MAX_HANDS):
+        if fingertips[i]:
+            trails[i].append(fingertips[i])
+            if len(trails[i]) > MAX_TRAIL_LENGTH:
+                trails[i].pop(0)
+        else:
+            trails[i].clear()
+
+    # ✅ Slower growth, capped max balloons
+    spawn_rate = 0.05 + min(score * 0.0005, 0.03)
+    speed_multiplier = 1.0 + min(score * 0.0025, 0.5)
 
     weights = [
         56,  # normal
         10,  # golden
-        20 + min(score // 10, 10),  # penalty
-        10 + min(score // 20, 10),  # bomb
-        4,  # dead eye
+        20 + min(score // 10, 10),
+        10 + min(score // 20, 10),
+        4,
     ]
-
     total = sum(weights)
     r = random.uniform(0, total)
 
-    if random.random() < spawn_rate and len(balloons) < 8:
+    if random.random() < spawn_rate and len(balloons) < MAX_BALLOONS:
         if r < weights[0]:
             balloons.append(Balloon(screen_width, screen_height, "normal"))
         elif r < weights[0] + weights[1]:
@@ -224,12 +226,8 @@ while running:
         dead_eye_timer -= dt
         if dead_eye_timer <= 0:
             dead_eye_active = False
-            dead_eye_timer = 0
 
-    if dead_eye_active:
-        screen.fill((255, 140, 0))
-    else:
-        screen.fill((135, 206, 235))
+    screen.fill((255, 140, 0) if dead_eye_active else (135, 206, 235))
 
     for balloon in balloons:
         if balloon.type == "normal":
@@ -243,7 +241,7 @@ while running:
         elif balloon.type == "dead_eye":
             color = (255, 69, 0)
         else:
-            color = (255, 255, 255)  # ✅ Fallback: white
+            color = (255, 255, 255)
         pygame.draw.circle(screen, color, balloon.position(), balloon.radius)
 
     for i, trail in enumerate(trails):
